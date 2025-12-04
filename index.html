@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>So Sánh Mã QR Bằng Camera (Fixed V6)</title>
+    <title>So Sánh Mã QR Bằng Camera (Fixed V7)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.0.4/dist/jsQR.min.js"></script>
     <style>
@@ -41,7 +41,7 @@
 <body class="p-6 flex items-center justify-center min-h-screen">
 
     <div class="w-full max-w-2xl bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
-        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Quét & So Sánh Mã QR Bằng Camera (Fixed V6)</h1>
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Quét & So Sánh Mã QR Bằng Camera (Fixed V7)</h1>
         <p class="text-center text-gray-500 mb-6" id="scan-instruction">Nhấn "Bật Camera" để bắt đầu quét Mã QR 1.</p>
 
         <button id="startButton" class="w-full mb-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150">
@@ -77,8 +77,8 @@
             <p class="text-sm text-gray-500 mt-2">So sánh chuỗi con nằm giữa dấu '|' thứ nhất và thứ hai.</p>
         </div>
         
-        <audio id="okSoundPlayer" src="http://googleusercontent.com/file_content/16" preload="auto"></audio>
-        <audio id="ngSoundPlayer" src="http://googleusercontent.com/file_content/17" preload="auto"></audio>
+        <audio id="okSoundPlayer" src="./sounds/ok_sound.mp3" preload="auto"></audio>
+        <audio id="ngSoundPlayer" src="./sounds/ng_sound.wav" preload="auto"></audio>
         
     </div>
 
@@ -116,16 +116,21 @@
 
         // Hàm phát âm thanh
         function playSound(type) {
-            // Đặt lại thời gian và phát lại để đảm bảo âm thanh luôn được phát từ đầu
             if (type === 'OK') {
                 okSoundPlayer.currentTime = 0; 
-                okSoundPlayer.play().catch(e => console.error("Lỗi phát âm báo OK:", e));
+                // Kiểm tra xem đã có âm thanh nào đang phát chưa (để tránh lỗi)
+                if (okSoundPlayer.paused) {
+                    okSoundPlayer.play().catch(e => console.error("Lỗi phát âm báo OK:", e));
+                }
                 return;
             }
             
             if (type === 'NG') {
                 ngSoundPlayer.currentTime = 0; 
-                ngSoundPlayer.play().catch(e => console.error("Lỗi phát âm báo NG:", e));
+                // Kiểm tra xem đã có âm thanh nào đang phát chưa (để tránh lỗi)
+                 if (ngSoundPlayer.paused) {
+                    ngSoundPlayer.play().catch(e => console.error("Lỗi phát âm báo NG:", e));
+                }
                 return;
             }
         }
@@ -256,20 +261,24 @@
             startButton.textContent = "Đang khởi động...";
             instructionElement.textContent = "Đang tải camera... Vui lòng chờ.";
 
-            // BƯỚC MỚI: Mở khóa âm thanh (quan trọng cho iOS/Safari)
+            // BƯỚC MỞ KHÓA ÂM THANH: quan trọng cho trình duyệt di động
+            // Đặt lại các trình phát và phát/dừng ngay lập tức để buộc trình duyệt cho phép phát lại sau này
             try {
                 okSoundPlayer.muted = true;
                 ngSoundPlayer.muted = true;
                 
-                // Thử phát và dừng ngay lập tức cả hai âm thanh
+                // Mở khóa OK
                 okSoundPlayer.play().then(() => {
                     okSoundPlayer.pause();
                     okSoundPlayer.muted = false;
+                    okSoundPlayer.currentTime = 0; // Đặt lại về đầu
                 }).catch(e => console.warn("Lỗi mở khóa OK sound:", e));
 
+                // Mở khóa NG
                 ngSoundPlayer.play().then(() => {
                     ngSoundPlayer.pause();
                     ngSoundPlayer.muted = false;
+                    ngSoundPlayer.currentTime = 0; // Đặt lại về đầu
                 }).catch(e => console.warn("Lỗi mở khóa NG sound:", e));
                 
             } catch (e) {
