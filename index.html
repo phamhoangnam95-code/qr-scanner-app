@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>So Sánh Mã QR Bằng Camera</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.0.4/dist/jsQR.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 320px;
+            margin: 0 auto;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        #video, #canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        #video.active { display: block; }
+        .scanner-frame::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80%;
+            height: 80%;
+            border: 4px solid rgba(255, 255, 255, 0.7); 
+            border-radius: 8px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="p-6 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-2xl bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Quét & So Sánh Mã QR Bằng Camera</h1>
+        <p class="text-center text-gray-500 mb-6">Quét hai mã QR để lưu nội dung, sau đó so sánh chúng.</p>
+
+        <button id="startButton" class="w-full mb-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150">
+            Bật Camera
+        </button>
+
+        <div class="camera-container mb-6 scanner-frame">
+            <video id="video" playsinline></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <div id="loadingMessage" class="p-4 bg-yellow-100 text-yellow-700 text-center hidden">Đang tải camera... Vui lòng cấp quyền!</div>
+            <div id="noCameraMessage" class="p-4 bg-red-100 text-red-700 text-center hidden">Lỗi: Không tìm thấy camera hoặc quyền bị từ chối.</div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <div id="qr1-box" class="p-4 border border-indigo-200 rounded-lg bg-indigo-50">
+                <p class="text-lg font-semibold text-indigo-700 mb-2">Mã QR 1 đã quét:</p>
+                <p id="extracted1" class="mt-1 text-base font-bold text-indigo-800 break-words">Chưa quét</p>
+            </div>
+            <div id="qr2-box" class="p-4 border border-purple-200 rounded-lg bg-purple-50">
+                <p class="text-lg font-semibold text-purple-700 mb-2">Mã QR 2 đã quét:</p>
+                <p id="extracted2" class="mt-1 text-base font-bold text-purple-800 break-words">Chưa quét</p>
+            </div>
+        </div>
+        
+        <div class="text-center p-6 border-4 rounded-xl shadow-lg" id="resultBox">
+            <h2 class="text-xl font-bold mb-2 text-gray-700">KẾT QUẢ SO SÁNH:</h2>
+            <div id="comparisonResult" class="text-4xl font-extrabold text-gray-400">
+                Đang chờ...
+            </div>
+            <button id="resetButton" class="mt-3 bg-gray-500 hover:bg-gray-600 text-white text-sm py-1 px-3 rounded hidden" onclick="resetApp()">Quét lại</button>
+            <p class="text-sm text-gray-500 mt-2">So sánh chuỗi con nằm giữa dấu '|' thứ nhất và thứ hai.</p>
+        </div>
+    </div>
+
+    <script>
+        // Các biến toàn cục
+        const video = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const canvas = canvasElement.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const noCameraMessage = document.getElementById('noCameraMessage');
+        const extracted1Element = document.getElementById('extracted1');
+        const extracted2Element = document.getElementById('extracted2');
+        const comparisonResultElement = document.getElementById('comparisonResult');
+        const resultBox = document.getElementById('resultBox');
+        const qr1Box = document.getElementById('qr1-box');
+        const qr2Box = document.getElementById('qr2-box');
+        const resetButton = document.getElementById('resetButton');
+
+        let isScanning = false;
+        let stream = null;
+        let qrContent1 = null; // Nội dung đã trích xuất QR 1
+        let qrContent2 = null; // Nội dung đã trích xuất QR 2
+        let currentScanTarget = 1; // 1 hoặc 2
+
+        // Hàm trích xuất chuỗi con (Logic tương tự như trước)
+        function extractSpecificCode(fullContent) {
+            if (!fullContent) return null;
+            const parts = fullContent.split('|');
+            return parts.length > 1 ? parts[1].trim() : null; // Lấy đoạn index 1
+        }
+
+        // Vòng lặp quét chính
+        function tick() {
+            if (!isScanning) return;
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvasElement.height = video.videoHeight;
+                canvasElement.width = video.videoWidth;
+                canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+
+                const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+
+                if (code) {
+                    const extractedCode = extractSpecificCode(code.data);
+                    
+                    if (currentScanTarget === 1 && qrContent1 === null) {
+                        // Quét thành công mã 1
+                        qrContent1 = extractedCode;
+                        extracted1Element.textContent = extractedCode || "Không trích xuất được";
+                        qr1Box.classList.add('border-green-400');
+                        qr1Box.classList.remove('border-indigo-200');
+                        currentScanTarget = 2; // Chuyển sang quét mã 2
+                    } else if (currentScanTarget === 2 && qrContent2 === null) {
+                        // Quét thành công mã 2
+                        qrContent2 = extractedCode;
+                        extracted2Element.textContent = extractedCode || "Không trích xuất được";
+                        qr2Box.classList.add('border-green-400');
+                        qr2Box.classList.remove('border-purple-200');
+                        
+                        // Đã có đủ 2 mã, dừng quét và so sánh
+                        stopCamera();
+                        compareContents();
+                        return;
+                    }
+                }
+            }
+            
+            requestAnimationFrame(tick);
+        }
+
+        // Hàm so sánh
+        function compareContents() {
+            resetButton.classList.remove('hidden');
+
+            if (qrContent1 === null || qrContent2 === null || qrContent1 === "" || qrContent2 === "") {
+                comparisonResultElement.textContent = 'NG';
+                comparisonResultElement.classList.remove('text-green-600', 'text-gray-400');
+                comparisonResultElement.classList.add('text-red-600');
+                resultBox.classList.remove('border-green-400', 'border-gray-300');
+                resultBox.classList.add('border-red-400');
+                return;
+            }
+
+            if (qrContent1 === qrContent2) {
+                comparisonResultElement.textContent = 'OK';
+                comparisonResultElement.classList.remove('text-red-600', 'text-gray-400');
+                comparisonResultElement.classList.add('text-green-600');
+                resultBox.classList.remove('border-red-400', 'border-gray-300');
+                resultBox.classList.add('border-green-400');
+            } else {
+                comparisonResultElement.textContent = 'NG';
+                comparisonResultElement.classList.remove('text-green-600', 'text-gray-400');
+                comparisonResultElement.classList.add('text-red-600');
+                resultBox.classList.remove('border-green-400', 'border-gray-300');
+                resultBox.classList.add('border-red-400');
+            }
+        }
+
+        // Hàm khởi động Camera
+        function startCamera() {
+            isScanning = true;
+            loadingMessage.classList.remove('hidden');
+            noCameraMessage.classList.add('hidden');
+            startButton.disabled = true;
+            startButton.textContent = "Đang khởi động...";
+
+            // Sử dụng "environment" để ưu tiên camera sau trên điện thoại
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }) 
+                .then(function(s) {
+                    stream = s;
+                    video.srcObject = stream;
+                    video.setAttribute("playsinline", true); // Bắt buộc cho iOS
+                    video.play();
+
+                    video.classList.add('active');
+                    loadingMessage.classList.add('hidden');
+                    startButton.textContent = "Tắt Camera";
+                    startButton.disabled = false;
+                    startButton.classList.remove('bg-indigo-600');
+                    startButton.classList.add('bg-red-500');
+
+                    video.onloadedmetadata = () => {
+                        requestAnimationFrame(tick); // Bắt đầu vòng lặp quét
+                    };
+                })
+                .catch(function(err) {
+                    console.error("Lỗi truy cập camera:", err);
+                    stopCamera();
+                    noCameraMessage.classList.remove('hidden');
+                    startButton.textContent = "Bật Camera";
+                    startButton.disabled = false;
+                    startButton.classList.remove('bg-red-500');
+                    startButton.classList.add('bg-indigo-600');
+                });
+        }
+
+        // Hàm dừng Camera
+        function stopCamera() {
+            isScanning = false;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.classList.remove('active');
+            startButton.textContent = "Bật Camera";
+            startButton.classList.remove('bg-red-500');
+            startButton.classList.add('bg-indigo-600');
+        }
+
+        // Hàm đặt lại ứng dụng
+        function resetApp() {
+            stopCamera();
+            qrContent1 = null;
+            qrContent2 = null;
+            currentScanTarget = 1;
+            extracted1Element.textContent = "Chưa quét";
+            extracted2Element.textContent = "Chưa quét";
+            comparisonResultElement.textContent = "Đang chờ...";
+            comparisonResultElement.classList.remove('text-green-600', 'text-red-600');
+            comparisonResultElement.classList.add('text-gray-400');
+            resultBox.classList.remove('border-green-400', 'border-red-400');
+            resultBox.classList.add('border-gray-300');
+            qr1Box.classList.remove('border-green-400');
+            qr1Box.classList.add('border-indigo-200');
+            qr2Box.classList.remove('border-green-400');
+            qr2Box.classList.add('border-purple-200');
+            resetButton.classList.add('hidden');
+        }
+
+        // Bắt đầu/Dừng Camera
+        startButton.addEventListener('click', () => {
+            if (isScanning) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        });
+
+        // Khởi tạo
+        document.addEventListener('DOMContentLoaded', resetApp);
+    </script>
+</body>
+</html>
