@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>So Sánh Mã QR Bằng Camera</title>
+    <title>So Sánh Mã QR Bằng Camera (Đã Sửa Lỗi Quét Lặp)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.0.4/dist/jsQR.min.js"></script>
     <style>
@@ -41,8 +41,8 @@
 <body class="p-6 flex items-center justify-center min-h-screen">
 
     <div class="w-full max-w-2xl bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
-        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Quét & So Sánh Mã QR Bằng Camera</h1>
-        <p class="text-center text-gray-500 mb-6">Quét hai mã QR để lưu nội dung, sau đó so sánh chúng.</p>
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Quét & So Sánh Mã QR Bằng Camera (Fixed)</h1>
+        <p class="text-center text-gray-500 mb-6" id="scan-instruction">Nhấn "Bật Camera" để bắt đầu quét Mã QR 1.</p>
 
         <button id="startButton" class="w-full mb-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150">
             Bật Camera
@@ -59,14 +59,16 @@
             <div id="qr1-box" class="p-4 border border-indigo-200 rounded-lg bg-indigo-50">
                 <p class="text-lg font-semibold text-indigo-700 mb-2">Mã QR 1 đã quét:</p>
                 <p id="extracted1" class="mt-1 text-base font-bold text-indigo-800 break-words">Chưa quét</p>
+                <span id="status1" class="text-sm text-yellow-600 font-medium">Chờ quét...</span>
             </div>
             <div id="qr2-box" class="p-4 border border-purple-200 rounded-lg bg-purple-50">
                 <p class="text-lg font-semibold text-purple-700 mb-2">Mã QR 2 đã quét:</p>
                 <p id="extracted2" class="mt-1 text-base font-bold text-purple-800 break-words">Chưa quét</p>
+                <span id="status2" class="text-sm text-gray-600 font-medium"></span>
             </div>
         </div>
         
-        <div class="text-center p-6 border-4 rounded-xl shadow-lg" id="resultBox">
+        <div class="text-center p-6 border-4 rounded-xl shadow-lg border-gray-300" id="resultBox">
             <h2 class="text-xl font-bold mb-2 text-gray-700">KẾT QUẢ SO SÁNH:</h2>
             <div id="comparisonResult" class="text-4xl font-extrabold text-gray-400">
                 Đang chờ...
@@ -91,18 +93,22 @@
         const qr1Box = document.getElementById('qr1-box');
         const qr2Box = document.getElementById('qr2-box');
         const resetButton = document.getElementById('resetButton');
+        const instructionElement = document.getElementById('scan-instruction');
+        const status1Element = document.getElementById('status1');
+        const status2Element = document.getElementById('status2');
+
 
         let isScanning = false;
         let stream = null;
         let qrContent1 = null; // Nội dung đã trích xuất QR 1
         let qrContent2 = null; // Nội dung đã trích xuất QR 2
-        let currentScanTarget = 1; // 1 hoặc 2
+        let isScanningCode1 = true; // True: đang quét mã 1; False: đang quét mã 2
 
-        // Hàm trích xuất chuỗi con (Logic tương tự như trước)
+        // Hàm trích xuất chuỗi con
         function extractSpecificCode(fullContent) {
             if (!fullContent) return null;
             const parts = fullContent.split('|');
-            return parts.length > 1 ? parts[1].trim() : null; // Lấy đoạn index 1
+            return parts.length > 1 ? parts[1].trim() : null;
         }
 
         // Vòng lặp quét chính
@@ -122,24 +128,50 @@
                 if (code) {
                     const extractedCode = extractSpecificCode(code.data);
                     
-                    if (currentScanTarget === 1 && qrContent1 === null) {
-                        // Quét thành công mã 1
-                        qrContent1 = extractedCode;
-                        extracted1Element.textContent = extractedCode || "Không trích xuất được";
-                        qr1Box.classList.add('border-green-400');
-                        qr1Box.classList.remove('border-indigo-200');
-                        currentScanTarget = 2; // Chuyển sang quét mã 2
-                    } else if (currentScanTarget === 2 && qrContent2 === null) {
-                        // Quét thành công mã 2
-                        qrContent2 = extractedCode;
-                        extracted2Element.textContent = extractedCode || "Không trích xuất được";
-                        qr2Box.classList.add('border-green-400');
-                        qr2Box.classList.remove('border-purple-200');
-                        
-                        // Đã có đủ 2 mã, dừng quét và so sánh
-                        stopCamera();
-                        compareContents();
-                        return;
+                    if (extractedCode) {
+                        if (isScanningCode1) {
+                            // Cố gắng quét mã 1
+                            qrContent1 = extractedCode;
+                            extracted1Element.textContent = extractedCode;
+                            qr1Box.classList.add('border-green-400');
+                            qr1Box.classList.remove('border-indigo-200');
+                            
+                            status1Element.textContent = "ĐÃ LƯU!";
+                            status1Element.classList.remove('text-yellow-600');
+                            status1Element.classList.add('text-green-600');
+
+                            // Chuyển sang quét Mã 2
+                            isScanningCode1 = false;
+                            instructionElement.textContent = "✅ Mã 1 đã lưu. Bây giờ, quét Mã QR 2.";
+                            status2Element.textContent = "Đang chờ quét...";
+                            status2Element.classList.add('text-yellow-600');
+
+                        } else {
+                            // Cố gắng quét mã 2
+                            if (extractedCode !== qrContent1) {
+                                // Chỉ lưu Mã 2 nếu nó KHÁC Mã 1 đã lưu
+                                qrContent2 = extractedCode;
+                                extracted2Element.textContent = extractedCode;
+                                qr2Box.classList.add('border-green-400');
+                                qr2Box.classList.remove('border-purple-200');
+
+                                status2Element.textContent = "ĐÃ LƯU!";
+                                status2Element.classList.remove('text-yellow-600');
+                                status2Element.classList.add('text-green-600');
+                                
+                                stopCamera();
+                                compareContents();
+                                return;
+                            } else {
+                                // Nếu người dùng quét lại chính Mã 1 khi đang ở chế độ quét Mã 2
+                                instructionElement.textContent = "⚠️ Vui lòng quét MÃ QR THỨ HAI KHÁC.";
+                                instructionElement.classList.add('text-red-600');
+                            }
+                        }
+                    } else {
+                        // Giải mã thành công nhưng không trích xuất được chuỗi con
+                        instructionElement.textContent = "Lỗi: Mã QR không đúng định dạng.";
+                        instructionElement.classList.add('text-red-600');
                     }
                 }
             }
@@ -147,11 +179,13 @@
             requestAnimationFrame(tick);
         }
 
-        // Hàm so sánh
+        // Hàm so sánh (Giữ nguyên)
         function compareContents() {
             resetButton.classList.remove('hidden');
+            instructionElement.classList.remove('text-red-600');
+            instructionElement.textContent = "Quá trình quét hoàn tất. Nhấn Quét lại để bắt đầu.";
 
-            if (qrContent1 === null || qrContent2 === null || qrContent1 === "" || qrContent2 === "") {
+            if (qrContent1 === null || qrContent2 === null) {
                 comparisonResultElement.textContent = 'NG';
                 comparisonResultElement.classList.remove('text-green-600', 'text-gray-400');
                 comparisonResultElement.classList.add('text-red-600');
@@ -175,20 +209,21 @@
             }
         }
 
-        // Hàm khởi động Camera
+        // Hàm khởi động Camera (Giữ nguyên)
         function startCamera() {
+            // ... (Phần này giữ nguyên, chỉ thay đổi nội dung nút) ...
             isScanning = true;
             loadingMessage.classList.remove('hidden');
             noCameraMessage.classList.add('hidden');
             startButton.disabled = true;
             startButton.textContent = "Đang khởi động...";
+            instructionElement.textContent = "Đang tải camera... Vui lòng chờ.";
 
-            // Sử dụng "environment" để ưu tiên camera sau trên điện thoại
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }) 
                 .then(function(s) {
                     stream = s;
                     video.srcObject = stream;
-                    video.setAttribute("playsinline", true); // Bắt buộc cho iOS
+                    video.setAttribute("playsinline", true);
                     video.play();
 
                     video.classList.add('active');
@@ -199,7 +234,8 @@
                     startButton.classList.add('bg-red-500');
 
                     video.onloadedmetadata = () => {
-                        requestAnimationFrame(tick); // Bắt đầu vòng lặp quét
+                        instructionElement.textContent = isScanningCode1 ? "🎯 Đang quét MÃ QR 1..." : "🎯 Đang quét MÃ QR 2...";
+                        requestAnimationFrame(tick);
                     };
                 })
                 .catch(function(err) {
@@ -210,11 +246,13 @@
                     startButton.disabled = false;
                     startButton.classList.remove('bg-red-500');
                     startButton.classList.add('bg-indigo-600');
+                    instructionElement.textContent = "Lỗi: Không thể truy cập camera.";
                 });
         }
 
-        // Hàm dừng Camera
+        // Hàm dừng Camera (Giữ nguyên)
         function stopCamera() {
+            // ... (Phần này giữ nguyên) ...
             isScanning = false;
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
@@ -226,23 +264,36 @@
             startButton.classList.add('bg-indigo-600');
         }
 
-        // Hàm đặt lại ứng dụng
+        // Hàm đặt lại ứng dụng (Cập nhật trạng thái)
         function resetApp() {
             stopCamera();
             qrContent1 = null;
             qrContent2 = null;
-            currentScanTarget = 1;
+            isScanningCode1 = true; // Quan trọng: Đặt lại về chế độ quét Mã 1
+            
             extracted1Element.textContent = "Chưa quét";
             extracted2Element.textContent = "Chưa quét";
+            
+            instructionElement.classList.remove('text-red-600');
+            instructionElement.textContent = "Nhấn 'Bật Camera' để bắt đầu quét Mã QR 1.";
+
             comparisonResultElement.textContent = "Đang chờ...";
             comparisonResultElement.classList.remove('text-green-600', 'text-red-600');
             comparisonResultElement.classList.add('text-gray-400');
             resultBox.classList.remove('border-green-400', 'border-red-400');
             resultBox.classList.add('border-gray-300');
+            
             qr1Box.classList.remove('border-green-400');
             qr1Box.classList.add('border-indigo-200');
             qr2Box.classList.remove('border-green-400');
             qr2Box.classList.add('border-purple-200');
+            
+            status1Element.textContent = "Chờ quét...";
+            status1Element.classList.remove('text-green-600');
+            status1Element.classList.add('text-yellow-600');
+            status2Element.textContent = "";
+            status2Element.classList.remove('text-yellow-600', 'text-green-600');
+            
             resetButton.classList.add('hidden');
         }
 
