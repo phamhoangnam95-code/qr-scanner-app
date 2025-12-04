@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>So Sánh Mã QR Bằng Camera (Fixed V5 - Khắc phục Lỗi Quét)</title>
+    <title>So Sánh Mã QR Bằng Camera (Fixed V6)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.0.4/dist/jsQR.min.js"></script>
     <style>
@@ -41,7 +41,7 @@
 <body class="p-6 flex items-center justify-center min-h-screen">
 
     <div class="w-full max-w-2xl bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
-        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Quét & So Sánh Mã QR Bằng Camera (Fixed V5)</h1>
+        <h1 class="text-3xl font-bold text-gray-800 text-center mb-4">Quét & So Sánh Mã QR Bằng Camera (Fixed V6)</h1>
         <p class="text-center text-gray-500 mb-6" id="scan-instruction">Nhấn "Bật Camera" để bắt đầu quét Mã QR 1.</p>
 
         <button id="startButton" class="w-full mb-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-150">
@@ -114,7 +114,7 @@
         let qrExtracted2 = null; 
         let isScanningCode1 = true; 
 
-        // Hàm phát âm thanh ĐÃ SỬA LỖI
+        // Hàm phát âm thanh
         function playSound(type) {
             // Đặt lại thời gian và phát lại để đảm bảo âm thanh luôn được phát từ đầu
             if (type === 'OK') {
@@ -247,7 +247,7 @@
             }
         }
 
-        // Hàm khởi động Camera
+        // Hàm khởi động Camera ĐÃ SỬA LỖI (V6 - Khắc phục âm thanh)
         function startCamera() {
             isScanning = true;
             loadingMessage.classList.remove('hidden');
@@ -256,6 +256,27 @@
             startButton.textContent = "Đang khởi động...";
             instructionElement.textContent = "Đang tải camera... Vui lòng chờ.";
 
+            // BƯỚC MỚI: Mở khóa âm thanh (quan trọng cho iOS/Safari)
+            try {
+                okSoundPlayer.muted = true;
+                ngSoundPlayer.muted = true;
+                
+                // Thử phát và dừng ngay lập tức cả hai âm thanh
+                okSoundPlayer.play().then(() => {
+                    okSoundPlayer.pause();
+                    okSoundPlayer.muted = false;
+                }).catch(e => console.warn("Lỗi mở khóa OK sound:", e));
+
+                ngSoundPlayer.play().then(() => {
+                    ngSoundPlayer.pause();
+                    ngSoundPlayer.muted = false;
+                }).catch(e => console.warn("Lỗi mở khóa NG sound:", e));
+                
+            } catch (e) {
+                console.warn("Lỗi tổng quát khi cố gắng mở khóa âm thanh:", e);
+            }
+            
+            // Tiếp tục khởi động camera như bình thường
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }) 
                 .then(function(s) {
                     stream = s;
